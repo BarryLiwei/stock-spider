@@ -33,19 +33,19 @@ func (t Task) Task(startDate string, endDate string) {
 
 	stocksLen := len(stocks)
 	taskNum := math.Ceil(float64(stocksLen) / float64(RequestLimit))
-	batchIndex := 1
+	taskIndex := 1
 
 	fmt.Printf("Total requests:%d，Total tasks:%d，Each task handing requests:%d...\n\n", stocksLen, int(taskNum), RequestLimit)
 
 	for i := 0; i < stocksLen; i += RequestLimit {
-		fmt.Printf("Task %d start...\n", batchIndex)
+		fmt.Printf("Task %d start...\n", taskIndex)
 
 		var sliceStocks []stock.Stock
-		if batchIndex == int(taskNum) {
+		if taskIndex == int(taskNum) {
 			// last task
 			sliceStocks = stocks[i:stocksLen]
 		} else {
-			sliceStocks = stocks[i : batchIndex*RequestLimit]
+			sliceStocks = stocks[i : taskIndex*RequestLimit]
 		}
 
 		sliceStocksLen := len(sliceStocks)
@@ -62,7 +62,7 @@ func (t Task) Task(startDate string, endDate string) {
 			case <-ticker.C:
 				chanLen := len(doneChan)
 				if chanLen == sliceStocksLen {
-					fmt.Printf("Task %d completed,Total spend:%ds\n\n", batchIndex, time.Now().Unix()-startTime)
+					fmt.Printf("Task %d completed,Total spend:%ds\n\n", taskIndex, time.Now().Unix()-startTime)
 					break Loop
 				}
 
@@ -74,7 +74,10 @@ func (t Task) Task(startDate string, endDate string) {
 			}
 		}
 
-		batchIndex++
+		close(spiderChan)
+		close(doneChan)
+
+		taskIndex++
 	}
 
 	fmt.Printf("All task done,Total spend:%ds\n\n", time.Now().Unix()-startTime)
@@ -113,12 +116,12 @@ func (t Task) Store(db *gorm.DB, spiderChan chan []Result, doneChan chan int) {
 			if !ok {
 				return
 			}
-			go t.BatchSave(db, s, doneChan)
+			go t.BulkStorage(db, s, doneChan)
 		}
 	}
 }
 
-func (t Task) BatchSave(db *gorm.DB, results []Result, doneChan chan int) error {
+func (t Task) BulkStorage(db *gorm.DB, results []Result, doneChan chan int) error {
 	if len(results) == 0 {
 		doneChan <- 1
 		return fmt.Errorf("results empty")
